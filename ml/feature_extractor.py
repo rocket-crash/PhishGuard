@@ -1,20 +1,21 @@
 """
 URL Feature Extractor
 =====================
-Extracts 21 features from a URL for phishing detection.
+Extracts 35 features from a URL for phishing detection.
 
 Features cover:
-  - URL structure (length, depth, special chars)
+  - URL structure (length, depth, special chars, encoding)
   - Domain analysis (age indicators, digit ratio, brand impersonation)
-  - Security signals (HTTPS, IP address, shorteners)
-  - Statistical properties (entropy, vowel/consonant ratio)
+  - Security signals (HTTPS, IP address, shorteners, punycode)
+  - Statistical properties (entropy, vowel/consonant ratio, token analysis)
+  - Phishing-specific (login keywords, suspicious extensions, query analysis)
 """
 
 import re
 import math
 import struct
 import socket
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, parse_qs
 from collections import Counter
 
 
@@ -49,10 +50,28 @@ _SUSPICIOUS_TLDS = frozenset({
 })
 _IPV4_RE = re.compile(r'(?:^|(?<=[@/]))(\d{1,3}\.){3}\d{1,3}(?=(?:[:/?#]|$))')
 
+# ──────────────────────────────────────────────────────────────
+# Phishing-specific keyword sets
+# ──────────────────────────────────────────────────────────────
+_LOGIN_KEYWORDS = frozenset({
+    'login', 'signin', 'sign-in', 'sign_in', 'log-in', 'log_in',
+    'verify', 'verification', 'authenticate', 'secure', 'security',
+    'account', 'update', 'confirm', 'suspend', 'alert', 'unlock',
+    'password', 'credential', 'banking', 'wallet', 'recover',
+    'webscr', 'cmd=_login', 'signin', 'logon',
+})
+
+_SUSPICIOUS_EXTENSIONS = frozenset({
+    '.exe', '.zip', '.rar', '.scr', '.bat', '.cmd', '.msi',
+    '.php', '.cgi', '.asp', '.aspx', '.jsp',
+})
+
+_ENCODED_CHAR_RE = re.compile(r'%[0-9a-fA-F]{2}')
+
 
 def extract_features(url: str) -> dict:
     """
-    Extract 21 features from a URL string.
+    Extract 35 features from a URL string.
     Returns a dict with feature_name → numeric_value.
     """
     parsed = urlparse(url)
@@ -61,6 +80,8 @@ def extract_features(url: str) -> dict:
     bare_domain = domain.split('@')[-1].split(':')[0]
     path = parsed.path or ''
     query = parsed.query or ''
+    path_lower = path.lower()
+    full_lower = full.lower()
 
     features: dict = {}
 
@@ -89,9 +110,7 @@ def extract_features(url: str) -> dict:
     # ── 3. Statistical features ──
     features['shannon_entropy'] = _shannon_entropy(full)
 
-    # ── 4. NEW features for improved detection ──
-
-    # Path analysis
+    # ── 4. Path & depth features ──
     features['path_length'] = len(path)
     features['path_depth'] = path.count('/') - 1 if path else 0  # subtract leading /
 
@@ -129,6 +148,69 @@ def extract_features(url: str) -> dict:
 
     # Suspicious TLD
     features['is_suspicious_tld'] = int(tld in _SUSPICIOUS_TLDS)
+
+    # ══════════════════════════════════════════════════════════
+    # ── 5. NEW phishing-specific features ──
+    # ══════════════════════════════════════════════════════════
+
+    # 5a. HTTP without S — phishing sites often lack TLS
+    features['has_http_no_s'] = int(parsed.scheme.lower() == 'http')
+
+    # 5b. URL length bucket — extremely long URLs are suspicious
+    url_len = len(full)
+    if url_len < 54:
+        features['url_length_bucket'] = 0   # short / normal
+    elif url_len < 75:
+        features['url_length_bucket'] = 1   # medium
+    elif url_len < 150:
+        features['url_length_bucket'] = 2   # long
+    else:
+        features['url_length_bucket'] = 3   # very long / suspicious
+
+    # 5c. Number of percent-encoded characters (obfuscation signal)
+    features['num_encoded_chars'] = len(_ENCODED_CHAR_RE.findall(full))
+
+    # 5d. Login / phishing keywords in URL path or query
+    features['has_login_keyword'] = int(any(
+        kw in full_lower for kw in _LOGIN_KEYWORDS
+    ))
+
+    # 5e. Query string analysis
+    features['query_length'] = len(query)
+    features['num_query_params'] = len(parse_qs(query, keep_blank_values=True)) if query else 0
+
+    # 5f. Suspicious file extensions in path
+    features['has_suspicious_extension'] = int(any(
+        path_lower.endswith(ext) for ext in _SUSPICIOUS_EXTENSIONS
+    ))
+
+    # 5g. Brand keyword in main domain (not subdomain) —
+    #     e.g. paypal-security.com
+    main_domain = parts[-2].lower() if len(parts) >= 2 else bare_domain.lower()
+    features['brand_in_domain'] = int(any(
+        brand in main_domain for brand in _BRAND_KEYWORDS
+    ))
+
+    # 5h. Number of redirect-like patterns in URL
+    features['num_redirects'] = full_lower.count('redirect') + full_lower.count('redir=') + full_lower.count('url=') + full_lower.count('goto=') + full_lower.count('next=') + full_lower.count('dest=')
+
+    # 5i. Punycode / internationalized domain name (IDN homograph attacks)
+    features['has_punycode'] = int('xn--' in bare_domain.lower())
+
+    # 5j. Average token length in domain — random DGA domains have short tokens
+    tokens = [t for t in re.split(r'[.\-_]', bare_domain) if t]
+    features['avg_domain_token_length'] = (
+        sum(len(t) for t in tokens) / len(tokens) if tokens else 0
+    )
+
+    # 5k. TLD length — unusual TLDs tend to be longer
+    features['tld_length'] = len(tld) - 1 if tld else 0  # subtract the leading dot
+
+    # 5l. Number of underscores (uncommon in legit domains)
+    features['num_underscores'] = full.count('_')
+
+    # 5m. Total digits in full URL (obfuscated URLs have many)
+    features['num_digits_in_url'] = sum(1 for c in full if c.isdigit())
 
     return features
 
@@ -202,7 +284,7 @@ if __name__ == '__main__':
         'https://google.com',
     ]
     print('=' * 70)
-    print('FEATURE EXTRACTION (21 features)')
+    print('FEATURE EXTRACTION (35 features)')
     print('=' * 70)
     for url in test_urls:
         print(f'\n>>> {url}')

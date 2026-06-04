@@ -6,7 +6,6 @@
     "url_length",
     "num_dots",
     "num_hyphens",
-    "num_at_symbols",
     "num_special_chars",
     "subdomain_depth",
     "has_ip_address",
@@ -17,13 +16,19 @@
     "path_length",
     "path_depth",
     "num_digits_in_domain",
-    "digit_ratio",
-    "num_subdomains",
     "has_port",
-    "has_double_slash_redirect",
-    "has_shortener",
     "vowel_consonant_ratio",
-    "brand_in_subdomain",
-    "is_suspicious_tld"
+    "is_suspicious_tld",
+    "has_http_no_s",
+    "url_length_bucket",
+    "num_encoded_chars",
+    "has_login_keyword",
+    "query_length",
+    "num_query_params",
+    "has_suspicious_extension",
+    "avg_domain_token_length",
+    "tld_length",
+    "num_underscores",
+    "num_digits_in_url"
   ]
 }

@@ -24,17 +24,17 @@ html { scroll-behavior: smooth; }
 body {
   font-family: 'Inter', system-ui, sans-serif;
   background-color: var(--bg-deep);
-  background-image: url('/static/img/bg.png');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(124,77,255,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(224,64,251,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(83,109,254,0.05) 0%, transparent 50%);
   color: var(--text);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 
 .container {
-  max-width: 720px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 48px 20px 64px;
 }
@@ -56,10 +56,11 @@ body {
   box-shadow: 0 8px 40px rgba(0,0,0,0.35);
 }
 
-header { text-align: center; margin-bottom: 40px; }
+/* ── Header ── */
+header { text-align: center; margin-bottom: 32px; }
 
 header h1 {
-  font-size: 2.5rem;
+  font-size: 2.8rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   background: linear-gradient(135deg, #e040fb 0%, #7c4dff 50%, #536dfe 100%);
@@ -72,11 +73,47 @@ header h1 {
 header p {
   color: var(--text-muted);
   font-size: 0.85rem;
-  max-width: 420px;
+  max-width: 480px;
   margin: 0 auto;
   line-height: 1.5;
 }
 
+/* ── Stats Bar ── */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 28px;
+  animation: fadeSlideUp 0.4s ease;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 16px 8px;
+  border-radius: 14px;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-family: 'Inter', monospace;
+  letter-spacing: -0.02em;
+}
+
+.stat-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.stat-safe { color: var(--safe); }
+.stat-suspicious { color: var(--suspicious); }
+.stat-malicious { color: var(--malicious); }
+.stat-accent { color: var(--accent); }
+
+/* ── Scan Bar ── */
 .scan-bar {
   display: flex;
   gap: 12px;
@@ -146,6 +183,7 @@ header p {
   border-radius: 10px;
 }
 
+/* ── Result Card ── */
 .result-card {
   padding: 24px;
   margin-bottom: 24px;
@@ -293,6 +331,7 @@ header p {
 .bar-suspicious { background: var(--suspicious); }
 .bar-malicious  { background: var(--malicious); }
 
+/* ── Sections ── */
 .section { margin-bottom: 28px; }
 
 .section > h2 {
@@ -304,23 +343,50 @@ header p {
   margin-bottom: 12px;
 }
 
+/* ── Charts Grid ── */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.chart-container {
+  padding: 20px;
+  overflow: hidden;
+}
+
+.chart-title {
+  font-size: 0.68rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+/* ── History Table ── */
 .history-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
 }
 .history-table thead th {
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-muted);
-  padding: 10px 14px;
+  padding: 10px 12px;
   text-align: left;
   background: var(--surface-3);
+  white-space: nowrap;
 }
-.history-table thead th:nth-child(2),
-.history-table thead th:nth-child(3) { text-align: center; }
+.history-table thead th:nth-child(1) { text-align: center; width: 32px; }
+.history-table thead th:nth-child(3),
+.history-table thead th:nth-child(4),
+.history-table thead th:nth-child(5),
+.history-table thead th:nth-child(6) { text-align: center; }
 .history-table thead th:last-child { text-align: right; }
 
 .history-table tbody tr {
@@ -328,10 +394,13 @@ header p {
   transition: background 0.2s;
 }
 .history-table tbody tr:hover { background: var(--surface-2); }
-.history-table td { padding: 10px 14px; color: rgba(255,255,255,0.75); }
-.history-table td:first-child { font-family: monospace; font-size: 0.72rem; }
-.history-table td:nth-child(2) { text-align: center; }
-.history-table td:nth-child(3) { text-align: center; font-family: monospace; }
+.history-table td { padding: 10px 12px; color: rgba(255,255,255,0.75); }
+.history-table td:nth-child(1) { text-align: center; color: var(--text-muted); font-size: 0.65rem; }
+.history-table td:nth-child(2) { font-family: monospace; font-size: 0.68rem; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-table td:nth-child(3) { text-align: center; }
+.history-table td:nth-child(4) { text-align: center; font-family: monospace; }
+.history-table td:nth-child(5) { text-align: center; font-family: monospace; font-size: 0.7rem; }
+.history-table td:nth-child(6) { text-align: center; }
 .history-table td:last-child { text-align: right; color: var(--text-muted); }
 
 .badge {
@@ -345,17 +414,20 @@ header p {
 .badge-safe       { background: rgba(74,222,128,0.12); color: var(--safe); }
 .badge-suspicious { background: rgba(251,191,36,0.12); color: var(--suspicious); }
 .badge-malicious  { background: rgba(248,113,113,0.12); color: var(--malicious); }
+.badge-ml         { background: rgba(224,64,251,0.12); color: var(--accent); }
 
-.chart-container {
-  padding: 20px;
-  overflow: hidden;
+/* ── Export Buttons ── */
+.export-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .btn-export {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 auto;
   padding: 12px 24px;
   font-size: 0.82rem;
   font-weight: 500;
@@ -365,11 +437,12 @@ header p {
   border-radius: 12px;
   cursor: pointer;
   backdrop-filter: blur(16px);
-  transition: border-color 0.25s, background 0.25s;
+  transition: border-color 0.25s, background 0.25s, transform 0.2s;
 }
 .btn-export:hover {
   border-color: var(--accent);
   background: rgba(224,64,251,0.08);
+  transform: translateY(-1px);
 }
 
 .empty-state {
@@ -393,3 +466,12 @@ footer {
 ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .stats-bar { grid-template-columns: repeat(3, 1fr); }
+  .charts-grid { grid-template-columns: 1fr; }
+  .container { padding: 24px 14px 48px; }
+  header h1 { font-size: 2rem; }
+  .export-buttons { flex-direction: column; }
+}

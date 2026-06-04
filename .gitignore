@@ -49,3 +49,5 @@ venv.bak/
 # Project specific
 ml/data/
 *.log
+*.pkl
+*.pkl

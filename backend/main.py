@@ -14,13 +14,13 @@ _PROJECT_ROOT = os.path.dirname(_BACKEND_DIR)
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 from routes import scan, health
-from services.dataset_lookup import load_datasets
-from services.cache import ResultCache
+# from services.dataset_lookup import load_datasets   # DISABLED: using ML-only prediction
+# from services.cache import ResultCache               # DISABLED: using ML-only prediction
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)-7s | %(message)s')
 logger = logging.getLogger('phishguard')
 
-app = FastAPI(title='PhishGuard API', description='Real-time phishing URL detection API powered by XGBoost', version='1.0.0')
+app = FastAPI(title='PhishGuard API', description='Real-time phishing URL detection API powered by XGBoost', version='2.0.0')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 
 app.mount('/static', StaticFiles(directory=os.path.join(_BACKEND_DIR, 'static')), name='static')
@@ -45,7 +45,7 @@ async def load_model():
             logger.info('Model loaded from %s', model_path)
         except Exception as exc:
             app.state.model = None
-            logger.warning('Failed to load model from %s: %s — ML inference disabled, dataset lookup still works.', model_path, exc)
+            logger.warning('Failed to load model from %s: %s — ML inference disabled.', model_path, exc)
     else:
         app.state.model = None
         logger.warning('model.pkl not found at %s — /scan will return stub responses. Run `python ml/train.py` to train the model first.', model_path)
@@ -59,13 +59,15 @@ async def load_model():
         logger.warning('features.json not found at %s — feature alignment disabled.', features_path)
 
     # ── 2. Load datasets into memory (O(1) lookup sets) ──
-    logger.info('Loading datasets for URL lookup...')
-    ds_stats = load_datasets()
-    logger.info('Dataset loading complete: %s', ds_stats)
+    # DISABLED: using ML-only prediction — uncomment to re-enable dataset lookup
+    # logger.info('Loading datasets for URL lookup...')
+    # ds_stats = load_datasets()
+    # logger.info('Dataset loading complete: %s', ds_stats)
 
     # ── 3. Initialise server-side result cache ──
-    app.state.cache = ResultCache(ttl=3600, max_size=10_000)
-    logger.info('Server-side result cache initialised (TTL=3600s, max=10000)')
+    # DISABLED: using ML-only prediction — uncomment to re-enable caching
+    # app.state.cache = ResultCache(ttl=3600, max_size=10_000)
+    # logger.info('Server-side result cache initialised (TTL=3600s, max=10000)')
 
     app.state.scan_history = []
 

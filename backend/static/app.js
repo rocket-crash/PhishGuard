@@ -1,21 +1,32 @@
+/* ================================================================
+   PhishGuard — Analyst Dashboard (app.js)
+   ================================================================
+   Handles: URL scanning, result rendering, stats bar, dual charts
+            (doughnut + bar), scan history table, and IoC report
+            export in JSON and CSV formats.
+   ================================================================ */
+
 const API_URL = '/scan/';
 const scanHistory = [];
 
-const $urlInput   = document.getElementById('url-input');
-const $scanBtn    = document.getElementById('scan-btn');
-const $scanLabel  = document.getElementById('scan-label');
-const $spinner    = document.getElementById('scan-spinner');
-const $errorMsg   = document.getElementById('error-msg');
-const $resultWrap = document.getElementById('result-wrap');
-const $resultCard = document.getElementById('result-card');
+// ── DOM Handles ──
+const $urlInput      = document.getElementById('url-input');
+const $scanBtn       = document.getElementById('scan-btn');
+const $scanLabel     = document.getElementById('scan-label');
+const $spinner       = document.getElementById('scan-spinner');
+const $errorMsg      = document.getElementById('error-msg');
+const $resultWrap    = document.getElementById('result-wrap');
+const $resultCard    = document.getElementById('result-card');
 const $chartSection  = document.getElementById('chart-section');
 const $historySection = document.getElementById('history-section');
-const $exportSection  = document.getElementById('export-section');
-const $emptyState = document.getElementById('empty-state');
+const $exportSection = document.getElementById('export-section');
+const $emptyState    = document.getElementById('empty-state');
+const $statsBar      = document.getElementById('stats-bar');
 
 $urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleScan(); });
 $scanBtn.addEventListener('click', handleScan);
 
+// ── Main Scan Handler ──
 async function handleScan() {
   const url = $urlInput.value.trim();
   if (!url) return;
@@ -34,7 +45,8 @@ async function handleScan() {
     const data = await res.json();
     scanHistory.push(data);
     renderResult(data);
-    renderChart();
+    renderStats();
+    renderCharts();
     renderHistory();
     renderExport();
     $emptyState.classList.add('hidden');
@@ -57,6 +69,7 @@ function setLoading(on) {
   else $resultWrap.style.opacity = '1';
 }
 
+// ── Result Card ──
 function renderResult(data) {
   const { url, cleaned_url, obfuscation_found = [], ml = {}, threat_intel = {}, final: ts = {}, forensics = {}, response_time_ms } = data;
   const level = ts.threat_level || 'safe';
@@ -80,12 +93,12 @@ function renderResult(data) {
           <div class="score-label">Threat Score: ${score}/100</div>
         </div>
       </div>
-      <div class="time">${response_time_ms?.toFixed(0) || '?'} ms</div>
+      <div class="time">${response_time_ms?.toFixed(0) || '?'} ms · source: ml</div>
     </div>
 
     <div class="confidence-section">
       <div class="confidence-label">
-        <span>ML Confidence</span>
+        <span>ML Confidence (phishing)</span>
         <span class="level-${level}">${(confidence * 100).toFixed(1)}%</span>
       </div>
       <div class="bar-track">
@@ -129,8 +142,32 @@ function infoTile(label, value, warn) {
   </div>`;
 }
 
-function renderChart() {
+// ── Stats Bar ──
+function renderStats() {
+  $statsBar.classList.remove('hidden');
+  const counts = { safe: 0, suspicious: 0, malicious: 0 };
+  let totalTime = 0;
+
+  scanHistory.forEach(s => {
+    const l = s.final?.threat_level;
+    if (l === 'safe') counts.safe++;
+    else if (l === 'suspicious') counts.suspicious++;
+    else if (l === 'malicious') counts.malicious++;
+    totalTime += s.response_time_ms || 0;
+  });
+
+  document.getElementById('stat-total').textContent = scanHistory.length;
+  document.getElementById('stat-safe').textContent = counts.safe;
+  document.getElementById('stat-suspicious').textContent = counts.suspicious;
+  document.getElementById('stat-malicious').textContent = counts.malicious;
+  document.getElementById('stat-avg-time').textContent =
+    scanHistory.length > 0 ? `${(totalTime / scanHistory.length).toFixed(0)}ms` : '—';
+}
+
+// ── Charts ──
+function renderCharts() {
   $chartSection.classList.remove('hidden');
+
   const counts = { Safe: 0, Suspicious: 0, Malicious: 0 };
   scanHistory.forEach(s => {
     const l = s.final?.threat_level;
@@ -139,20 +176,74 @@ function renderChart() {
     else if (l === 'malicious') counts.Malicious++;
   });
 
-  const canvas = document.getElementById('risk-chart');
-  const ctx = canvas.getContext('2d');
+  // ── Doughnut Chart ──
+  const doughnutCanvas = document.getElementById('risk-doughnut');
+  const doughnutCtx = doughnutCanvas.getContext('2d');
+  if (window._doughnutChart) window._doughnutChart.destroy();
 
-  if (window._chartInstance) window._chartInstance.destroy();
-
-  window._chartInstance = new Chart(ctx, {
-    type: 'bar',
+  window._doughnutChart = new Chart(doughnutCtx, {
+    type: 'doughnut',
     data: {
       labels: ['Safe', 'Suspicious', 'Malicious'],
       datasets: [{
         data: [counts.Safe, counts.Suspicious, counts.Malicious],
         backgroundColor: ['#4ade80', '#fbbf24', '#f87171'],
-        borderRadius: 6,
-        maxBarThickness: 60,
+        borderColor: 'rgba(6,6,12,0.8)',
+        borderWidth: 3,
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: 'rgba(255,255,255,0.6)',
+            font: { family: 'Inter', size: 11 },
+            padding: 16,
+            usePointStyle: true,
+            pointStyleWidth: 10,
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(10,10,15,0.9)',
+          borderColor: 'rgba(255,255,255,0.15)',
+          borderWidth: 1,
+          titleFont: { family: 'Inter' },
+          bodyFont: { family: 'Inter' },
+        }
+      },
+    }
+  });
+
+  // ── Bar Chart (Timeline) ──
+  const barCanvas = document.getElementById('risk-bar');
+  const barCtx = barCanvas.getContext('2d');
+  if (window._barChart) window._barChart.destroy();
+
+  // Build per-scan score timeline
+  const labels = scanHistory.map((_, i) => `#${i + 1}`);
+  const scores = scanHistory.map(s => s.final?.score ?? 50);
+  const bgColors = scanHistory.map(s => {
+    const l = s.final?.threat_level;
+    if (l === 'malicious') return '#f87171';
+    if (l === 'suspicious') return '#fbbf24';
+    return '#4ade80';
+  });
+
+  window._barChart = new Chart(barCtx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Threat Score',
+        data: scores,
+        backgroundColor: bgColors,
+        borderRadius: 4,
+        maxBarThickness: 28,
       }]
     },
     options: {
@@ -166,16 +257,25 @@ function renderChart() {
           borderWidth: 1,
           titleFont: { family: 'Inter' },
           bodyFont: { family: 'Inter' },
+          callbacks: {
+            label: (ctx) => {
+              const scan = scanHistory[ctx.dataIndex];
+              const url = scan?.url || '?';
+              const short = url.length > 40 ? url.substring(0, 37) + '…' : url;
+              return `${short} — Score: ${ctx.raw}/100`;
+            }
+          }
         }
       },
       scales: {
         x: {
-          ticks: { color: 'rgba(255,255,255,0.55)', font: { family: 'Inter', size: 12 } },
+          ticks: { color: 'rgba(255,255,255,0.4)', font: { family: 'Inter', size: 10 } },
           grid: { display: false },
           border: { display: false },
         },
         y: {
-          ticks: { color: 'rgba(255,255,255,0.35)', font: { family: 'Inter', size: 11 }, stepSize: 1 },
+          min: 0, max: 100,
+          ticks: { color: 'rgba(255,255,255,0.3)', font: { family: 'Inter', size: 10 }, stepSize: 25 },
           grid: { color: 'rgba(255,255,255,0.05)' },
           border: { display: false },
         }
@@ -184,6 +284,7 @@ function renderChart() {
   });
 }
 
+// ── History Table ──
 function renderHistory() {
   $historySection.classList.remove('hidden');
   const $count = document.getElementById('history-count');
@@ -191,30 +292,40 @@ function renderHistory() {
   $count.textContent = scanHistory.length;
   $tbody.innerHTML = '';
 
-  [...scanHistory].reverse().forEach(scan => {
+  [...scanHistory].reverse().forEach((scan, i) => {
+    const idx = scanHistory.length - i;
     const level = scan.final?.threat_level || 'safe';
     const score = scan.final?.score ?? 0;
+    const conf = scan.ml?.confidence ?? 0;
     const ms = scan.response_time_ms?.toFixed(0) ?? '?';
+    const source = scan.source || 'ml';
     const displayUrl = scan.url?.length > 50 ? scan.url.substring(0, 47) + '…' : (scan.url || '—');
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <td>${idx}</td>
       <td title="${escapeHtml(scan.url || '')}">${escapeHtml(displayUrl)}</td>
       <td><span class="badge badge-${level}">${level}</span></td>
       <td>${score}/100</td>
+      <td class="level-${level}">${(conf * 100).toFixed(1)}%</td>
+      <td><span class="badge badge-ml">${source}</span></td>
       <td>${ms} ms</td>`;
     $tbody.appendChild(tr);
   });
 }
 
+// ── Export Section ──
 function renderExport() {
   $exportSection.classList.remove('hidden');
-  const $btn = document.getElementById('export-btn');
-  $btn.textContent = `📄 Export IoC Report (${scanHistory.length} scans)`;
-  $btn.onclick = exportIoC;
+  const $jsonBtn = document.getElementById('export-json-btn');
+  const $csvBtn = document.getElementById('export-csv-btn');
+  $jsonBtn.textContent = `📄 Download IoC Report (JSON) — ${scanHistory.length} scans`;
+  $csvBtn.textContent = `📊 Download IoC Report (CSV) — ${scanHistory.length} scans`;
+  $jsonBtn.onclick = exportIoCJSON;
+  $csvBtn.onclick = exportIoCCSV;
 }
 
-function exportIoC() {
+function exportIoCJSON() {
   const report = {
     report_type: 'PhishGuard IoC Report',
     generated_at: new Date().toISOString(),
@@ -230,8 +341,10 @@ function exportIoC() {
       threat_level: scan.final?.threat_level,
       threat_score: scan.final?.score,
       ml_confidence: scan.ml?.confidence,
+      is_phishing: scan.ml?.is_phishing,
       reasons: scan.final?.reasons,
       obfuscation: scan.obfuscation_found,
+      source: scan.source,
       virustotal: scan.threat_intel?.virustotal,
       urlhaus: scan.threat_intel?.urlhaus,
       forensics: scan.forensics,
@@ -239,14 +352,72 @@ function exportIoC() {
     })),
   };
 
-  const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+  downloadBlob(
+    JSON.stringify(report, null, 2),
+    'application/json',
+    `phishguard-ioc-report-${Date.now()}.json`
+  );
+}
+
+function exportIoCCSV() {
+  const headers = [
+    'url', 'cleaned_url', 'threat_level', 'threat_score', 'ml_confidence',
+    'is_phishing', 'source', 'response_time_ms', 'reasons',
+    'vt_malicious', 'vt_total', 'urlhaus_known',
+    'domain_age_days', 'newly_registered', 'has_mx_record',
+    'is_typosquat', 'obfuscation'
+  ];
+
+  const rows = scanHistory.map(scan => {
+    const vt = scan.threat_intel?.virustotal || {};
+    const uh = scan.threat_intel?.urlhaus || {};
+    const whois = scan.forensics?.whois || {};
+    const dns = scan.forensics?.dns || {};
+    const typo = scan.forensics?.typosquatting || {};
+    return [
+      csvEscape(scan.url),
+      csvEscape(scan.cleaned_url),
+      scan.final?.threat_level || '',
+      scan.final?.score ?? '',
+      scan.ml?.confidence ?? '',
+      scan.ml?.is_phishing ?? '',
+      scan.source || '',
+      scan.response_time_ms?.toFixed(2) ?? '',
+      csvEscape((scan.final?.reasons || []).join('; ')),
+      vt.malicious_count ?? '',
+      vt.total_engines ?? '',
+      uh.is_known_malicious ?? '',
+      whois.domain_age_days ?? '',
+      whois.is_newly_registered ?? '',
+      dns.has_mx_record ?? '',
+      typo.is_typosquat ?? '',
+      csvEscape((scan.obfuscation_found || []).join('; ')),
+    ].join(',');
+  });
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  downloadBlob(csv, 'text/csv', `phishguard-ioc-report-${Date.now()}.csv`);
+}
+
+// ── Utilities ──
+function downloadBlob(content, mimeType, filename) {
+  const blob = new Blob([content], { type: mimeType });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `phishguard-ioc-report-${Date.now()}.json`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
+}
+
+function csvEscape(str) {
+  if (str == null) return '';
+  str = String(str);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
 }
 
 function escapeHtml(str) {
